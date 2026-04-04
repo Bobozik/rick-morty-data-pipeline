@@ -1,32 +1,40 @@
-import psycopg2  # Библиотека-драйвер для работы с Postgres
+import psycopg2
+import requests
 
-# Параметры подключения
 DB_PARAMS = {
     "host": "localhost",
     "port": 5432,
-    "database": "ricknmorty",
+    "database": "postgres",
     "user": "postgres",
-    "password": "postgres" 
+    "password": "password" # ТВОЙ ПАРОЛЬ
 }
 
-def check_db_connection():
-    try:
-        # 1. Пробуем «постучаться» в базу
-        conn = psycopg2.connect(**DB_PARAMS)
-        cur = conn.cursor()
-        
-        # 2. Выполняем простой SQL-запрос через Python
-        cur.execute("SELECT version();")
-        db_version = cur.fetchone()
-        
-        print(f"✅ Успех! Подключено к: {db_version}")
-        
-        # 3. Закрываем соединение
-        cur.close()
-        conn.close()
-        
-    except Exception as error:
-        print(f"❌ Ошибка подключения: {error}")
+def fetch_and_save():
+    url = "https://rickandmortyapi.com/api/character"
+    
+    # 1. Проверяем ответ сервера
+    response = requests.get(url)
+    
+    if response.status_code == 200:
+            data = response.json()
+            characters = data['results']
+            
+            # 2. Подключаемся
+            conn = psycopg2.connect(**DB_PARAMS)
+            cur = conn.cursor()
+            
+            # 3. Сохраняем
+            insert_query = "INSERT INTO raw_characters (name, status, species) VALUES (%s, %s, %s)"
+            for char in characters:
+                cur.execute(insert_query, (char['name'], char['status'], char['species']))
+            
+            conn.commit()
+            print(f"✅ Успех! Загружено {len(characters)} персонажей.")
+            
+            cur.close()
+            conn.close()
+    else:
+        print(f"❌ Ошибка API: Код {response.status_code}. Сервер прислал не JSON.")
 
 if __name__ == "__main__":
-    check_db_connection()
+    fetch_and_save()
